@@ -39,23 +39,33 @@ pub async fn mint_cnft(rpc_url:String, merkle_tree:String, payer_secret:String, 
             collection: None,
             uses: None,
         };
-        let last_blockhash = rpc_client.get_latest_blockhash().unwrap();
-
-        let mint_ix = MintV1Builder::new().leaf_delegate(payer.pubkey()).leaf_owner(payer.pubkey()).merkle_tree(merkle_tree.pubkey()).payer(payer.pubkey()).tree_config(tree_config).tree_creator_or_delegate(payer.pubkey()).metadata(metadata).instruction();
-        let mint_non_versioned_tx = Transaction::new_signed_with_payer(&[mint_ix], Some(&payer.pubkey()), &[&payer], last_blockhash);
-        let mint_versioned_tx =  VersionedTransaction::from(mint_non_versioned_tx);
-    
-        let mint_send_transaction = rpc_client.send_transaction(&mint_versioned_tx);
-        match mint_send_transaction {
-            Ok(signature) => {
-                info!("Success mint to: {:?}. Signature: {:?}", payer.pubkey(), signature);
-                let duration = Duration::from_secs(1);
-                thread::sleep(duration);
-            }
-            Err(error) => {
-                error!("Error while trying mint: {:?}", error);
-                let duration = Duration::from_secs(1);
-                thread::sleep(duration);
+        loop {
+            let last_blockhash = rpc_client.get_latest_blockhash();
+            match last_blockhash {
+                Ok(hash) => {
+                    let mint_ix = MintV1Builder::new().leaf_delegate(payer.pubkey()).leaf_owner(payer.pubkey()).merkle_tree(merkle_tree.pubkey()).payer(payer.pubkey()).tree_config(tree_config).tree_creator_or_delegate(payer.pubkey()).metadata(metadata).instruction();
+                    let mint_non_versioned_tx = Transaction::new_signed_with_payer(&[mint_ix], Some(&payer.pubkey()), &[&payer], hash);
+                    let mint_versioned_tx =  VersionedTransaction::from(mint_non_versioned_tx);
+                
+                    let mint_send_transaction = rpc_client.send_transaction(&mint_versioned_tx);
+                    match mint_send_transaction {
+                        Ok(signature) => {
+                            info!("Success mint to: {:?}. Signature: {:?}", payer.pubkey(), signature);
+                            let duration = Duration::from_secs(1);
+                            thread::sleep(duration);
+                        }
+                        Err(error) => {
+                            error!("Error while trying mint: {:?}", error);
+                            let duration = Duration::from_secs(1);
+                            thread::sleep(duration);
+                        }
+                    }
+                    break;
+                }
+                Err(_error) => {
+                    //will try again getting blockhash for trans
+                    continue;
+                }
             }
         }
     }
